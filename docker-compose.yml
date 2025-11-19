@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: camera-analytics-db
+    environment:
+      POSTGRES_DB: camera_analytics
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: camera-analytics-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # Camera Analytics API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: camera-analytics-api
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/camera_analytics
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - DETECTION_DEVICE=${DETECTION_DEVICE:-cpu}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./recordings:/app/recordings
+      - ./models:/app/models
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Optional: MinIO for object storage
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: camera-analytics-storage
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: minioadmin
+  #     MINIO_ROOT_PASSWORD: minioadmin
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   volumes:
+  #     - minio_data:/data
+  #   restart: unless-stopped
+
+  # Optional: Grafana for monitoring
+  # grafana:
+  #   image: grafana/grafana:latest
+  #   container_name: camera-analytics-grafana
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - GF_SECURITY_ADMIN_PASSWORD=admin
+  #   volumes:
+  #     - grafana_data:/var/lib/grafana
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  # minio_data:
+  # grafana_data:
+
+networks:
+  default:
+    name: camera-analytics-network
