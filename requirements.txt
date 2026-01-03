@@ -1,0 +1,58 @@
+# Camera Analytics - Core Dependencies
+# Python 3.10+
+
+# Web Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.6
+websockets>=12.0
+
+# AI/ML - Object Detection
+ultralytics>=8.1.0
+torch>=2.2.0
+torchvision>=0.17.0
+opencv-python>=4.9.0
+numpy>=1.26.0
+Pillow>=10.2.0
+scipy>=1.10.0
+
+# Database
+sqlalchemy[asyncio]>=2.0.25
+asyncpg>=0.29.0  # PostgreSQL async driver
+alembic>=1.13.0  # Database migrations
+psycopg2-binary>=2.9.9  # PostgreSQL sync driver (fallback)
+
+# Caching
+redis>=5.0.1
+aioredis>=2.0.1
+
+# Data Validation & Settings
+pydantic>=2.6.0
+pydantic-settings>=2.1.0
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+cryptography>=42.0.0
+python-multipart>=0.0.6
+
+# Async utilities
+aiofiles>=23.2.1
+httpx>=0.26.0
+
+# Monitoring & Logging
+prometheus-client>=0.19.0
+python-json-logger>=2.0.7
+
+# Utilities
+python-dateutil>=2.8.2
+pytz>=2024.1
+click>=8.1.7  # CLI framework
+rich>=13.7.0  # Terminal formatting
+pyyaml>=6.0.1
+
+# Optional: Email notifications
+aiosmtplib>=3.0.1
+
+# Optional: Video processing
+imageio[ffmpeg]>=2.33.0
