@@ -8,6 +8,7 @@ people, vehicles, and other objects in video frames.
 import logging
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List, Optional, Tuple
 
 import numpy as np
 import torch
@@ -32,10 +33,10 @@ class Detection:
     class_name: str
     class_id: int
     confidence: float
-    bbox: tuple[int, int, int, int]
-    track_id: int | None = None
+    bbox: Tuple[int, int, int, int]
+    track_id: Optional[int] = None
 
-    def center(self) -> tuple[int, int]:
+    def center(self) -> Tuple[int, int]:
         """
         Calculate center point of bounding box.
 
@@ -107,7 +108,7 @@ class DetectionEngine:
         self.confidence_threshold = confidence_threshold
         self.iou_threshold = iou_threshold
         self._model = None
-        self._class_names: list[str] = []
+        self._class_names: List[str] = []
         self._device_type = self._get_device()
 
         logger.info(
@@ -133,7 +134,7 @@ class DetectionEngine:
                 logger.warning(f"Requested device '{self.device}' not available, using CPU")
             return "cpu"
 
-    async def load_model(self, model_path: Path | None = None) -> bool:
+    async def load_model(self, model_path: Optional[Path] = None) -> bool:
         """
         Load YOLO model.
 
@@ -172,8 +173,8 @@ class DetectionEngine:
     async def detect(
         self,
         frame: np.ndarray,
-        classes: list[str] | None = None,
-    ) -> list[Detection]:
+        classes: Optional[List[str]] = None,
+    ) -> List[Detection]:
         """
         Detect objects in a frame.
 
@@ -204,7 +205,7 @@ class DetectionEngine:
                 verbose=False,
             )
 
-            detections: list[Detection] = []
+            detections: List[Detection] = []
             result = results[0]  # Get results for the first (and only) image
 
             # Process results
@@ -232,9 +233,9 @@ class DetectionEngine:
 
     async def detect_batch(
         self,
-        frames: list[np.ndarray],
-        classes: list[str] | None = None,
-    ) -> list[list[Detection]]:
+        frames: List[np.ndarray],
+        classes: Optional[List[str]] = None,
+    ) -> List[List[Detection]]:
         """
         Detect objects in multiple frames (batched for efficiency).
 
@@ -264,11 +265,11 @@ class DetectionEngine:
                 verbose=False,
             )
 
-            batch_detections: list[list[Detection]] = []
+            batch_detections: List[List[Detection]] = []
 
             # Process results for each frame in the batch
             for result in results:
-                frame_detections: list[Detection] = []
+                frame_detections: List[Detection] = []
                 for box in result.boxes:
                     class_id = int(box.cls[0])
                     class_name = result.names[class_id]
@@ -292,7 +293,7 @@ class DetectionEngine:
             logger.exception(f"Error during batch detection: {e}")
             return [[] for _ in frames]
 
-    def get_supported_classes(self) -> list[str]:
+    def get_supported_classes(self) -> List[str]:
         """
         Get list of supported object classes.
 

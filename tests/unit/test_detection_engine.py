@@ -6,7 +6,6 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
-
 from camera_analytics.core.detection_engine import Detection, DetectionEngine
 
 
@@ -28,7 +27,7 @@ def mock_yolo_model():
         mock_result = MagicMock()
         mock_result.boxes = [mock_box]
         mock_result.names = {0: "person", 1: "car"}
-
+        
         # args[0] is the frame or list of frames
         num_frames = 1
         if isinstance(args[0], list):

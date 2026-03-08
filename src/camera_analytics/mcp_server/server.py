@@ -6,7 +6,7 @@ AI assistants like Claude to interact with the camera analytics system.
 """
 
 import logging
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class CameraAnalyticsMCPServer:
         self.prompts = self._register_prompts()
         logger.info("CameraAnalyticsMCPServer initialized")
 
-    def _register_tools(self) -> dict[str, dict]:
+    def _register_tools(self) -> Dict[str, Dict]:
         """
         Register available MCP tools.
 
@@ -170,7 +170,7 @@ class CameraAnalyticsMCPServer:
             },
         }
 
-    def _register_resources(self) -> dict[str, dict]:
+    def _register_resources(self) -> Dict[str, Dict]:
         """
         Register available MCP resources.
 
@@ -200,7 +200,7 @@ class CameraAnalyticsMCPServer:
             },
         }
 
-    def _register_prompts(self) -> dict[str, dict]:
+    def _register_prompts(self) -> Dict[str, Dict]:
         """
         Register available MCP prompts.
 
@@ -250,7 +250,7 @@ class CameraAnalyticsMCPServer:
             },
         }
 
-    async def call_tool(self, tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    async def call_tool(self, tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
         """
         Execute an MCP tool.
 
@@ -285,21 +285,21 @@ class CameraAnalyticsMCPServer:
         else:
             return {"error": f"Tool {tool_name} not implemented yet"}
 
-    async def _detect_objects(self, arguments: dict) -> dict:
+    async def _detect_objects(self, arguments: Dict) -> Dict:
         """Handle detect_objects tool call (stub)."""
         return {
             "detections": [],
             "message": "Object detection stub - not yet implemented",
         }
 
-    async def _create_monitoring_rule(self, arguments: dict) -> dict:
+    async def _create_monitoring_rule(self, arguments: Dict) -> Dict:
         """Handle create_monitoring_rule tool call (stub)."""
         return {
             "rule_id": "rule_stub_001",
             "message": f"Created monitoring rule: {arguments.get('name')}",
         }
 
-    async def _query_analytics(self, arguments: dict) -> dict:
+    async def _query_analytics(self, arguments: Dict) -> Dict:
         """Handle query_analytics tool call (stub)."""
         return {
             "data": [],
@@ -307,28 +307,28 @@ class CameraAnalyticsMCPServer:
             "message": "Analytics query stub - not yet implemented",
         }
 
-    async def _search_recordings(self, arguments: dict) -> dict:
+    async def _search_recordings(self, arguments: Dict) -> Dict:
         """Handle search_recordings tool call (stub)."""
         return {
             "recordings": [],
             "message": "Recording search stub - not yet implemented",
         }
 
-    async def _get_camera_status(self, arguments: dict) -> dict:
+    async def _get_camera_status(self, arguments: Dict) -> Dict:
         """Handle get_camera_status tool call (stub)."""
         return {
             "cameras": {},
             "message": "Camera status stub - not yet implemented",
         }
 
-    async def _configure_camera(self, arguments: dict) -> dict:
+    async def _configure_camera(self, arguments: Dict) -> Dict:
         """Handle configure_camera tool call (stub)."""
         return {
             "camera_id": arguments.get("camera_id"),
             "message": f"Configured camera: {arguments.get('name')}",
         }
 
-    async def get_resource(self, uri: str) -> dict[str, Any]:
+    async def get_resource(self, uri: str) -> Dict[str, Any]:
         """
         Retrieve an MCP resource.
 
@@ -357,7 +357,7 @@ class CameraAnalyticsMCPServer:
         else:
             raise ValueError(f"Unknown resource URI: {uri}")
 
-    async def _get_camera_resource(self, camera_id: str) -> dict:
+    async def _get_camera_resource(self, camera_id: str) -> Dict:
         """Get camera resource (stub)."""
         return {
             "uri": f"camera://{camera_id}",
@@ -366,7 +366,7 @@ class CameraAnalyticsMCPServer:
             "message": "Camera resource stub",
         }
 
-    async def _get_recording_resource(self, recording_id: str) -> dict:
+    async def _get_recording_resource(self, recording_id: str) -> Dict:
         """Get recording resource (stub)."""
         return {
             "uri": f"recording://{recording_id}",
@@ -374,7 +374,7 @@ class CameraAnalyticsMCPServer:
             "message": "Recording resource stub",
         }
 
-    async def _get_alert_resource(self, alert_id: str) -> dict:
+    async def _get_alert_resource(self, alert_id: str) -> Dict:
         """Get alert resource (stub)."""
         return {
             "uri": f"alert://{alert_id}",
@@ -382,7 +382,7 @@ class CameraAnalyticsMCPServer:
             "message": "Alert resource stub",
         }
 
-    async def _get_analytics_resource(self, path: str) -> dict:
+    async def _get_analytics_resource(self, path: str) -> Dict:
         """Get analytics resource (stub)."""
         return {
             "uri": f"analytics://{path}",
@@ -390,7 +390,7 @@ class CameraAnalyticsMCPServer:
             "message": "Analytics resource stub",
         }
 
-    async def get_prompt(self, prompt_name: str, arguments: dict) -> str:
+    async def get_prompt(self, prompt_name: str, arguments: Dict) -> str:
         """
         Get a prompt template filled with arguments.
 
@@ -416,7 +416,7 @@ class CameraAnalyticsMCPServer:
         else:
             return f"Prompt {prompt_name} not implemented yet"
 
-    def _prompt_analyze_footage(self, arguments: dict) -> str:
+    def _prompt_analyze_footage(self, arguments: Dict) -> str:
         """Generate analyze-security-footage prompt."""
         incident = arguments.get("incident_description", "unknown incident")
         time_range = arguments.get("time_range", "recent")
@@ -430,7 +430,7 @@ I'll search camera footage from {cameras} during {time_range} and provide:
 3. Suggested next steps
 """
 
-    def _prompt_setup_monitoring(self, arguments: dict) -> str:
+    def _prompt_setup_monitoring(self, arguments: Dict) -> str:
         """Generate setup-monitoring prompt."""
         objective = arguments.get("objective", "monitoring")
 
@@ -443,7 +443,7 @@ Let me ask a few questions to create the right alert rules:
 4. How should I notify you?
 """
 
-    def _prompt_daily_report(self, arguments: dict) -> str:
+    def _prompt_daily_report(self, arguments: Dict) -> str:
         """Generate daily-security-report prompt."""
         date = arguments.get("date", "yesterday")
 
@@ -457,7 +457,7 @@ I'll analyze:
 - Recommendations
 """
 
-    def get_server_info(self) -> dict[str, Any]:
+    def get_server_info(self) -> Dict[str, Any]:
         """
         Get MCP server information.
 

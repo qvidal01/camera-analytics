@@ -2,6 +2,7 @@
 Unit tests for the AnalyticsEngine module.
 """
 
+from datetime import datetime, UTC
 
 from camera_analytics.core.analytics_engine import AnalyticsEngine, Line, LineCrossingEvent
 from camera_analytics.core.detection_engine import Detection

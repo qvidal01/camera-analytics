@@ -2,6 +2,7 @@
 API router for alert management.
 """
 
+from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from camera_analytics.core.alert_manager import AlertManager, AlertRule
@@ -38,7 +39,7 @@ async def remove_alert_rule(
     return
 
 
-@router.get("/alerts/rules", response_model=list[AlertRule])
+@router.get("/alerts/rules", response_model=List[AlertRule])
 async def list_alert_rules(alert_manager: AlertManager = Depends(get_alert_manager)):
     """List all defined alert rules."""
     return list(alert_manager.rules.values())

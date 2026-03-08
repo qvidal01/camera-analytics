@@ -12,6 +12,7 @@ This example demonstrates:
 import asyncio
 import logging
 
+from camera_analytics.config import get_settings
 from camera_analytics.core.camera_manager import CameraConfig, CameraManager, CameraType
 from camera_analytics.utils.logging import setup_logging
 

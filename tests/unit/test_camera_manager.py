@@ -2,6 +2,7 @@
 Unit tests for the CameraManager module.
 """
 
+import asyncio
 from unittest.mock import MagicMock, patch
 
 import numpy as np

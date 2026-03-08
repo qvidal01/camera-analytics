@@ -139,7 +139,7 @@ async def test_email_action_triggered(mock_send, alert_manager):
 
     await alert_manager.evaluate({"any_event": True})
     mock_send.assert_called_once()
-
+    
     # Check that the recipient was the override from the action
     _, kwargs = mock_send.call_args
     assert "override@example.com" in kwargs["recipients"]

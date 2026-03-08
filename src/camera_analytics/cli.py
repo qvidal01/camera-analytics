@@ -1,23 +1,18 @@
+import logging
 import asyncio
 import json
-import logging
-from typing import Any
+from typing import Dict, Any
 
 import click
 
 from camera_analytics.config import get_settings
-from camera_analytics.core.alert_manager import (
-    AlertManager,
-    AlertRule,
-    RuleCondition,
-    RuleConditionOperator,
-)
-from camera_analytics.core.analytics_engine import AnalyticsEngine, Line
-from camera_analytics.core.camera_manager import CameraConfig, CameraManager, CameraType
-from camera_analytics.core.detection_engine import DetectionEngine
-from camera_analytics.core.recording_manager import RecordingManager
-from camera_analytics.core.tracking_engine import TrackingEngine
 from camera_analytics.utils.logging import setup_logging
+from camera_analytics.core.camera_manager import CameraManager, CameraConfig, CameraType
+from camera_analytics.core.detection_engine import DetectionEngine
+from camera_analytics.core.tracking_engine import TrackingEngine
+from camera_analytics.core.analytics_engine import AnalyticsEngine, Line
+from camera_analytics.core.alert_manager import AlertManager, AlertRule, RuleCondition, RuleConditionOperator, AlertAction
+from camera_analytics.core.recording_manager import RecordingManager
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -30,7 +25,7 @@ def main(ctx: click.Context, debug: bool):
     """Camera Analytics CLI."""
     setup_logging(level="DEBUG" if debug else settings.log_level)
     ctx.ensure_object(dict)
-
+    
     async def _ainit_components():
         camera_manager = CameraManager()
         detection_engine = DetectionEngine(
@@ -52,7 +47,7 @@ def main(ctx: click.Context, debug: bool):
         ctx.obj["analytics_engine"] = analytics_engine
         ctx.obj["alert_manager"] = alert_manager
         ctx.obj["recording_manager"] = recording_manager
-
+        
     asyncio.run(_ainit_components())
 
 
@@ -72,7 +67,7 @@ def camera():
 
 @camera.command("list")
 @click.pass_obj
-def camera_list(obj: dict[str, Any]):
+def camera_list(obj: Dict[str, Any]):
     """List all cameras."""
     camera_manager: CameraManager = obj["camera_manager"]
 
@@ -85,7 +80,7 @@ def camera_list(obj: dict[str, Any]):
         click.echo("Configured Cameras:")
         for cam_id, cam_info in cameras.items():
             click.echo(f"  ID: {cam_id}, Name: {cam_info['name']}, Type: {cam_info['type']}, Status: {cam_info['status']}")
-
+            
     asyncio.run(_alist_cameras())
 
 
@@ -97,7 +92,7 @@ def camera_list(obj: dict[str, Any]):
 @click.option("--source-url", required=True, help="Connection URL or device path")
 @click.option("--fps", type=int, default=15, help="Target frames per second")
 @click.option("--resolution", default="1920x1080", help="Target resolution as WIDTHxHEIGHT")
-def camera_add(obj: dict[str, Any], id: str, name: str, source_type: str, source_url: str, fps: int, resolution: str):
+def camera_add(obj: Dict[str, Any], id: str, name: str, source_type: str, source_url: str, fps: int, resolution: str):
     """Add a new camera."""
     camera_manager: CameraManager = obj["camera_manager"]
 
@@ -120,14 +115,14 @@ def camera_add(obj: dict[str, Any], id: str, name: str, source_type: str, source
                 click.echo(f"Failed to add camera '{name}' (ID: {id}). Check logs for details.")
         except ValueError as e:
             click.echo(f"Error: {e}", err=True)
-
+            
     asyncio.run(_aadd_camera())
 
 
 @camera.command("remove")
 @click.pass_obj
 @click.option("--id", required=True, help="ID of the camera to remove")
-def camera_remove(obj: dict[str, Any], id: str):
+def camera_remove(obj: Dict[str, Any], id: str):
     """Remove a camera."""
     camera_manager: CameraManager = obj["camera_manager"]
 
@@ -137,7 +132,7 @@ def camera_remove(obj: dict[str, Any], id: str):
             return
         await camera_manager.remove_camera(id)
         click.echo(f"Camera '{id}' removed successfully.")
-
+        
     asyncio.run(_aremove_camera())
 
 
@@ -149,7 +144,7 @@ def alerts():
 
 @alerts.command("list")
 @click.pass_obj
-def alert_rule_list(obj: dict[str, Any]):
+def alert_rule_list(obj: Dict[str, Any]):
     """List all configured alert rules."""
     alert_manager: AlertManager = obj["alert_manager"]
 
@@ -162,13 +157,13 @@ def alert_rule_list(obj: dict[str, Any]):
         click.echo("Configured Alert Rules:")
         for rule in rules:
             click.echo(f"  ID: {rule.id}, Name: {rule.name}, Enabled: {rule.enabled}")
-            click.echo("    Conditions:")
+            click.echo(f"    Conditions:")
             for cond in rule.conditions:
                 click.echo(f"      - Field: {cond.field}, Operator: {cond.operator.value}, Value: {cond.value}")
-            click.echo("    Actions:")
+            click.echo(f"    Actions:")
             for action in rule.actions:
                 click.echo(f"      - Type: {action.get('type')}, Details: {action}")
-
+                
     asyncio.run(_alist_rules())
 
 
@@ -182,7 +177,7 @@ def alert_rule_list(obj: dict[str, Any]):
 @click.option("--enabled/--disabled", default=True, help="Enable or disable the rule")
 @click.option("--priority", type=int, default=1, help="Priority of the rule")
 def alert_rule_add(
-    obj: dict[str, Any],
+    obj: Dict[str, Any],
     id: str,
     name: str,
     description: str,
@@ -197,7 +192,7 @@ def alert_rule_add(
     try:
         conditions_data = json.loads(conditions_json)
         actions_data = json.loads(actions_json)
-
+        
         conditions = []
         for cond_data in conditions_data:
             conditions.append(
@@ -237,7 +232,7 @@ def alert_rule_add(
 @click.option("--id", required=True, help="ID of the alert rule to remove")
 
 
-def alert_rule_remove(obj: dict[str, Any], id: str):
+def alert_rule_remove(obj: Dict[str, Any], id: str):
 
 
     """Remove an alert rule."""
@@ -297,7 +292,7 @@ def analytics():
 @click.pass_obj
 
 
-def analytics_list_lines(obj: dict[str, Any]):
+def analytics_list_lines(obj: Dict[str, Any]):
 
 
     """List all configured analytics lines."""
@@ -360,7 +355,7 @@ def analytics_list_lines(obj: dict[str, Any]):
 @click.option("--y2", type=int, required=True, help="Y-coordinate of the second point")
 
 
-def analytics_add_line(obj: dict[str, Any], id: str, x1: int, y1: int, x2: int, y2: int):
+def analytics_add_line(obj: Dict[str, Any], id: str, x1: int, y1: int, x2: int, y2: int):
 
 
     """Add a new line for line-crossing detection."""
@@ -405,7 +400,7 @@ def analytics_add_line(obj: dict[str, Any], id: str, x1: int, y1: int, x2: int, 
 @click.option("--id", required=True, help="ID of the line to remove")
 
 
-def analytics_remove_line(obj: dict[str, Any], id: str):
+def analytics_remove_line(obj: Dict[str, Any], id: str):
 
 
     """Remove an analytics line."""

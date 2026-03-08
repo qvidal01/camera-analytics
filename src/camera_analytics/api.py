@@ -1,18 +1,29 @@
 import asyncio
 import logging
+import sys
 from contextlib import asynccontextmanager
+
+# Configure logging so our app logs actually show up
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    stream=sys.stderr,
+)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from camera_analytics.config import get_settings
-from camera_analytics.core.alert_manager import AlertManager
-from camera_analytics.core.analytics_engine import AnalyticsEngine
 from camera_analytics.core.camera_manager import CameraManager
 from camera_analytics.core.detection_engine import DetectionEngine
-from camera_analytics.core.pipeline import main_pipeline
-from camera_analytics.core.recording_manager import RecordingManager
 from camera_analytics.core.tracking_engine import TrackingEngine
+from camera_analytics.core.analytics_engine import AnalyticsEngine
+from camera_analytics.core.alert_manager import AlertManager
+from camera_analytics.core.recording_manager import RecordingManager
+from camera_analytics.core.vlm_engine import VLMEngine, VLMConfig
+from camera_analytics.core.event_bus import EventBus
+from camera_analytics.core.pipeline import main_pipeline
+
 
 logger = logging.getLogger(__name__)
 settings = get_settings()
@@ -27,6 +38,8 @@ app_state = {
     "analytics_engine": None,
     "alert_manager": None,
     "recording_manager": None,
+    "vlm_engine": None,
+    "event_bus": None,
     "pipeline_task": None,
 }
 
@@ -54,6 +67,21 @@ async def lifespan(app: FastAPI):
     alert_manager = AlertManager(settings)
     recording_manager = RecordingManager(settings, camera_manager)
 
+    # Initialize VLM engine for scene understanding
+    vlm_engine = VLMEngine(VLMConfig(
+        api_url=settings.vlm_api_url,
+        model=settings.vlm_model,
+        prompt=settings.vlm_prompt,
+        max_tokens=settings.vlm_max_tokens,
+        temperature=settings.vlm_temperature,
+        timeout=settings.vlm_timeout,
+        enabled=settings.vlm_enabled,
+    ))
+    await vlm_engine.initialize()
+
+    # Initialize event bus
+    event_bus = EventBus(max_history=500)
+
     # Load the detection model
     await detection_engine.load_model()
 
@@ -64,6 +92,8 @@ async def lifespan(app: FastAPI):
     app.state.core_components["analytics_engine"] = analytics_engine
     app.state.core_components["alert_manager"] = alert_manager
     app.state.core_components["recording_manager"] = recording_manager
+    app.state.core_components["vlm_engine"] = vlm_engine
+    app.state.core_components["event_bus"] = event_bus
 
     # Start the main processing pipeline in the background
     pipeline_task = asyncio.create_task(main_pipeline(app.state.core_components))
@@ -86,6 +116,8 @@ async def lifespan(app: FastAPI):
         await app.state.core_components["alert_manager"].shutdown()
     if app.state.core_components["recording_manager"]:
         await app.state.core_components["recording_manager"].stop_all_recordings()
+    if app.state.core_components["vlm_engine"]:
+        await app.state.core_components["vlm_engine"].shutdown()
 
 
 def create_app() -> FastAPI:
@@ -111,11 +143,14 @@ def create_app() -> FastAPI:
     )
 
     # Include API routers
-    from camera_analytics.routers import alerts, analytics, cameras
+    from camera_analytics.routers import alerts, analytics, cameras, scenes, discovery, events
 
     app_instance.include_router(cameras.router, prefix="/api", tags=["Cameras"])
     app_instance.include_router(analytics.router, prefix="/api", tags=["Analytics"])
     app_instance.include_router(alerts.router, prefix="/api", tags=["Alerts"])
+    app_instance.include_router(scenes.router, prefix="/api", tags=["Scenes"])
+    app_instance.include_router(discovery.router, prefix="/api", tags=["Discovery"])
+    app_instance.include_router(events.router, prefix="/api", tags=["Events"])
 
     # Temporarily print registered routes for debugging
     logger.info("Registered routes:")

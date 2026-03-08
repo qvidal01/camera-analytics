@@ -78,3 +78,20 @@ docker-compose up -d
 - `ANALYSIS_SUMMARY.md` - Architecture
 - `ISSUES_FOUND.md` - Known issues
 - `IMPROVEMENT_PLAN.md` - Roadmap
+
+---
+
+## MCP Servers & Tools
+
+<!-- Auto-generated: which MCP servers Claude should use in this project -->
+
+| Server | Purpose |
+|--------|---------|
+| `docker` | Docker container management — use for building, deploying, and monitoring containers |
+| `graphiti` | Knowledge graph / memory on AI server (192.168.0.234) |
+
+### Agents & Skills
+
+**Agents:** Use `Explore` agent for YOLOv8 pipeline and MCP server analysis.
+
+**Skills:** Run `qg-python` before pushing.

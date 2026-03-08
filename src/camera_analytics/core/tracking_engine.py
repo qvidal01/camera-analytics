@@ -7,7 +7,8 @@ Kalman filtering and Re-ID matching to track objects across camera views.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, UTC
+from typing import Dict, List, Optional
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -57,7 +58,7 @@ class Track:
 
     track_id: int
     class_name: str
-    detections: list[Detection] = field(default_factory=list)
+    detections: List[Detection] = field(default_factory=list)
     first_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
     last_seen: datetime = field(default_factory=lambda: datetime.now(UTC))
     active: bool = True
@@ -70,11 +71,11 @@ class Track:
         self.detections.append(detection)
         self.last_seen = datetime.now(UTC)
 
-    def get_current_bbox(self) -> tuple | None:
+    def get_current_bbox(self) -> Optional[tuple]:
         """Get most recent bounding box."""
         return self.detections[-1].bbox if self.detections else None
 
-    def get_trajectory(self) -> list[tuple]:
+    def get_trajectory(self) -> List[tuple]:
         """Get list of center points (trajectory)."""
         return [det.center() for det in self.detections]
 
@@ -103,11 +104,11 @@ class TrackingEngine:
         self.max_age = max_age
         self.min_hits = min_hits
         self.iou_threshold = iou_threshold
-        self._tracks: dict[int, Track] = {}
+        self._tracks: Dict[int, Track] = {}
         self._next_track_id = 1
         logger.info("TrackingEngine initialized")
 
-    def update(self, detections: list[Detection]) -> list[Track]:
+    def update(self, detections: List[Detection]) -> List[Track]:
         """
         Update tracks with new detections using IoU matching.
 
@@ -167,7 +168,7 @@ class TrackingEngine:
                 if t not in matched_track_indices:
                     if track.age > self.max_age:
                         track.active = False
-
+        
         self._tracks = {tid: t for tid, t in self._tracks.items() if t.active}
 
         # Return tracks that are confirmed (have enough hits)
@@ -185,6 +186,6 @@ class TrackingEngine:
         self._next_track_id += 1
         logger.debug(f"Created new track: {track.track_id}")
 
-    def get_active_tracks(self) -> list[Track]:
+    def get_active_tracks(self) -> List[Track]:
         """Get all currently active tracks."""
         return [track for track in self._tracks.values() if track.active]

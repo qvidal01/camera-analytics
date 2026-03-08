@@ -2,7 +2,8 @@
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, UTC
+from typing import Dict, List
 
 from camera_analytics.core.tracking_engine import Track
 
@@ -41,9 +42,9 @@ class AnalyticsEngine:
 
     def __init__(self):
         """Initialize analytics engine."""
-        self._lines: dict[str, Line] = {}
-        self._track_history: dict[int, list[tuple]] = {}
-        self.latest_events: list[LineCrossingEvent] = []
+        self._lines: Dict[str, Line] = {}
+        self._track_history: Dict[int, List[tuple]] = {}
+        self.latest_events: List[LineCrossingEvent] = []
         logger.info("AnalyticsEngine initialized")
 
     def add_line(self, line: Line):
@@ -61,11 +62,11 @@ class AnalyticsEngine:
         del self._lines[line_id]
         logger.info(f"Removed line: {line_id}")
 
-    def get_latest_events(self, limit: int = 100) -> list[LineCrossingEvent]:
+    def get_latest_events(self, limit: int = 100) -> List[LineCrossingEvent]:
         """Get the latest analytics events."""
         return self.latest_events[:limit]
 
-    def update(self, tracks: list[Track]) -> list[LineCrossingEvent]:
+    def update(self, tracks: List[Track]) -> List[LineCrossingEvent]:
         """
         Process tracks and generate analytics events.
 
@@ -95,7 +96,7 @@ class AnalyticsEngine:
                     )
                     events.append(event)
                     logger.info(f"Line crossing detected: {event}")
-
+        
         # Add new events to the in-memory list
         if events:
             self.latest_events = events + self.latest_events

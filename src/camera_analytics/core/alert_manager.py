@@ -1,16 +1,18 @@
 """
 Alert management and rule evaluation engine.
 
-This module handles alert rule creation, evaluation, and multi-channel notifications.
+This module handles alert rule creation, evaluation, and multi-channel notifications
+including Slack integration.
 """
 
-import json
 import logging
+import json
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Dict, List, Optional
 
-import aiosmtplib
 import httpx
 
 from camera_analytics.config.settings import Settings
@@ -49,7 +51,7 @@ class RuleCondition:
     operator: RuleConditionOperator
     value: Any
 
-    def evaluate(self, context: dict[str, Any]) -> bool:
+    def evaluate(self, context: Dict[str, Any]) -> bool:
         """Evaluate condition against context."""
         if self.field not in context:
             return False
@@ -102,8 +104,8 @@ class AlertRule:
     id: str
     name: str
     description: str
-    conditions: list[RuleCondition]
-    actions: list[dict[str, Any]]
+    conditions: List[RuleCondition]
+    actions: List[Dict[str, Any]]
     enabled: bool = True
     priority: int = 1
 
@@ -112,15 +114,19 @@ class AlertManager:
     """
     Manages alert rules and executes notifications.
 
-    Evaluates rules against detection events and triggers configured actions.
+    Evaluates rules against detection events and triggers configured actions
+    including Slack notifications.
     """
 
     def __init__(self, settings: Settings):
         """Initialize alert manager."""
-        self.rules: dict[str, AlertRule] = {}
+        self.rules: Dict[str, AlertRule] = {}
         self.settings = settings
         self._http_client = httpx.AsyncClient()
+        self._slack_cooldowns: Dict[str, float] = {}  # camera_id -> last_alert_time
         logger.info("AlertManager initialized")
+        if settings.slack_bot_token:
+            logger.info(f"Slack alerts enabled -> {settings.slack_channel}")
 
     def add_rule(self, rule: AlertRule) -> None:
         """Add a new alert rule."""
@@ -133,7 +139,7 @@ class AlertManager:
             del self.rules[rule_id]
             logger.info(f"Removed alert rule: {rule_id}")
 
-    async def evaluate(self, event: dict[str, Any]) -> list[str]:
+    async def evaluate(self, event: Dict[str, Any]) -> List[str]:
         """
         Evaluate event against all rules.
 
@@ -156,59 +162,88 @@ class AlertManager:
 
         return triggered
 
-    async def _execute_actions(self, rule: AlertRule, event: dict[str, Any]) -> None:
+    async def _execute_actions(self, rule: AlertRule, event: Dict[str, Any]) -> None:
         """Execute actions for triggered rule."""
         for action in rule.actions:
             action_type = action.get("type")
-            if action_type == "email":
-                await self._send_email(action, rule, event)
-            elif action_type == "webhook":
+            if action_type == "webhook":
                 await self._send_webhook(action, rule, event)
-            # ... other actions
+            elif action_type == "slack":
+                await self.send_slack_alert(
+                    camera_name=event.get("camera_id", "unknown"),
+                    detections=event.get("detections", []),
+                    scene_description=event.get("scene_description"),
+                )
 
-    async def _send_email(self, action: dict, rule: AlertRule, event: dict) -> None:
-        """Send email notification."""
-        if not all([
-            self.settings.smtp_host,
-            self.settings.smtp_user,
-            self.settings.smtp_password,
-        ]):
-            logger.warning("SMTP settings not configured. Cannot send email alert.")
-            return
-
-        to_email = action.get("recipient", self.settings.alert_email_to)
-        if not to_email:
-            logger.warning("No recipient for email alert.")
-            return
-
-        subject = f"Alert: {rule.name}"
-        body = f"""
-        An alert has been triggered.
-
-        Rule: {rule.name}
-        Description: {rule.description}
-        Timestamp: {event.get('timestamp')}
-
-        Event Details:
-        {json.dumps(event, indent=2, default=str)}
+    async def send_slack_alert(
+        self,
+        camera_name: str,
+        detections: List[str],
+        scene_description: Optional[str] = None,
+        camera_id: Optional[str] = None,
+    ) -> bool:
         """
+        Send a detection alert to Slack with cooldown.
+
+        Returns True if message was sent, False if on cooldown or failed.
+        """
+        token = self.settings.slack_bot_token
+        if not token:
+            return False
+
+        # Check cooldown per camera
+        cooldown_key = camera_id or camera_name
+        now = time.time()
+        last_alert = self._slack_cooldowns.get(cooldown_key, 0)
+        if now - last_alert < self.settings.slack_cooldown_seconds:
+            return False
+
+        # Build the message
+        det_summary = ", ".join(detections) if detections else "motion detected"
+        blocks = [
+            {
+                "type": "header",
+                "text": {"type": "plain_text", "text": f"Camera Alert: {camera_name}"},
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {"type": "mrkdwn", "text": f"*Detected:*\n{det_summary}"},
+                    {"type": "mrkdwn", "text": f"*Time:*\n{datetime.now().strftime('%I:%M:%S %p')}"},
+                ],
+            },
+        ]
+
+        if scene_description:
+            blocks.append({
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"*Scene:* {scene_description[:300]}"},
+            })
 
         try:
-            await aiosmtplib.send(
-                hostname=self.settings.smtp_host,
-                port=self.settings.smtp_port,
-                username=self.settings.smtp_user,
-                password=self.settings.smtp_password,
-                sender=self.settings.smtp_from,
-                recipients=[to_email],
-                message=f"Subject: {subject}\n\n{body}",
-                start_tls=True,
+            resp = await self._http_client.post(
+                "https://slack.com/api/chat.postMessage",
+                headers={"Authorization": f"Bearer {token}"},
+                json={
+                    "channel": self.settings.slack_channel,
+                    "text": f"Alert: {det_summary} at {camera_name}",
+                    "blocks": blocks,
+                },
+                timeout=10.0,
             )
-            logger.info(f"Sent email alert for rule '{rule.name}' to {to_email}")
+            data = resp.json()
+            if data.get("ok"):
+                self._slack_cooldowns[cooldown_key] = now
+                logger.info(f"Slack alert sent for {camera_name}: {det_summary}")
+                return True
+            else:
+                logger.warning(f"Slack API error: {data.get('error')}")
+                return False
         except Exception as e:
-            logger.exception(f"Failed to send email alert: {e}")
+            logger.warning(f"Failed to send Slack alert: {e}")
+            return False
 
-    async def _send_webhook(self, action: dict, rule: AlertRule, event: dict) -> None:
+    async def _send_webhook(self, action: Dict, rule: AlertRule, event: Dict) -> None:
         """Send webhook notification."""
         url = action.get("url", self.settings.webhook_url)
         if not url:

@@ -6,7 +6,7 @@ support, validation, and type safety.
 """
 
 from functools import lru_cache
-from typing import Literal
+from typing import List, Literal, Union
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -85,6 +85,11 @@ class Settings(BaseSettings):
     twilio_from_number: str = Field(default="", description="Twilio from phone number")
     twilio_to_number: str = Field(default="", description="Twilio to phone number")
 
+    # Slack Settings
+    slack_bot_token: str = Field(default="", description="Slack bot OAuth token (xoxb-...)")
+    slack_channel: str = Field(default="#camera-alerts", description="Slack channel for alerts")
+    slack_cooldown_seconds: int = Field(default=30, ge=5, description="Min seconds between Slack alerts per camera")
+
     # Optional: Webhook
     webhook_url: str = Field(default="", description="Webhook notification URL")
 
@@ -98,9 +103,40 @@ class Settings(BaseSettings):
     encryption_key: str = Field(
         default="", description="Fernet encryption key for credentials"
     )
-    allowed_origins: list[str] = Field(
-        default=["http://localhost:3000", "http://localhost:8000"],
-        description="CORS allowed origins",
+    allowed_origins: Union[str, List[str]] = Field(
+        default="http://localhost:3000,http://localhost:8000",
+        description="CORS allowed origins (comma-separated string or JSON list)",
+    )
+
+    # UniFi Protect Settings (for auto-discovery)
+    unifi_protect_host: str = Field(default="", description="UniFi Protect controller IP/hostname")
+    unifi_protect_username: str = Field(default="", description="UniFi Protect admin username")
+    unifi_protect_password: str = Field(default="", description="UniFi Protect admin password")
+    unifi_protect_port: int = Field(default=443, description="UniFi Protect controller port")
+    unifi_protect_verify_ssl: bool = Field(default=False, description="Verify SSL certificate")
+
+    # VLM (Vision Language Model) Settings
+    vlm_enabled: bool = Field(default=False, description="Enable VLM scene descriptions")
+    vlm_api_url: str = Field(
+        default="http://localhost:8080/v1/chat/completions",
+        description="VLM API endpoint (llama-server or Ollama OpenAI-compatible URL)",
+    )
+    vlm_model: str = Field(
+        default="qwen3-vl-2b-instruct",
+        description="VLM model name (e.g., qwen3-vl-2b-instruct, qwen3-vl:2b, llava)",
+    )
+    vlm_prompt: str = Field(
+        default="Describe what is happening in this security camera frame. Include details about people, vehicles, activities, and anything notable. Be concise but descriptive. Focus on security-relevant details.",
+        description="Default prompt for scene descriptions",
+    )
+    vlm_max_tokens: int = Field(default=256, ge=32, le=2048, description="Max tokens for VLM response")
+    vlm_temperature: float = Field(default=0.3, ge=0.0, le=2.0, description="VLM temperature")
+    vlm_timeout: float = Field(default=30.0, ge=1.0, description="VLM request timeout in seconds")
+
+    # Detection Class Filter (comma-separated, empty = all classes)
+    detection_classes: str = Field(
+        default="person,car,truck,bus,motorcycle,bicycle,dog,cat,backpack,suitcase,handbag",
+        description="Comma-separated list of YOLO classes to detect (empty = all)",
     )
 
     # Performance Settings
@@ -130,7 +166,12 @@ class Settings(BaseSettings):
     def parse_origins(cls, v):
         """Parse comma-separated origins from environment variable."""
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
+            # Handle both comma-separated and JSON array formats
+            v = v.strip()
+            if v.startswith("["):
+                import json
+                return json.loads(v)
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
         return v
 
 

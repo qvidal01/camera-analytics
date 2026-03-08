@@ -2,7 +2,7 @@
 API router for analytics management.
 """
 
-
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from camera_analytics.core.analytics_engine import AnalyticsEngine, Line, LineCrossingEvent
@@ -38,13 +38,13 @@ async def remove_line(
     return
 
 
-@router.get("/analytics/lines", response_model=list[Line])
+@router.get("/analytics/lines", response_model=List[Line])
 async def list_lines(analytics_engine: AnalyticsEngine = Depends(get_analytics_engine)):
     """List all defined lines."""
     return list(analytics_engine._lines.values())
 
 
-@router.get("/analytics/events", response_model=list[LineCrossingEvent])
+@router.get("/analytics/events", response_model=List[LineCrossingEvent])
 async def get_latest_events(analytics_engine: AnalyticsEngine = Depends(get_analytics_engine)):
     """Get the latest analytics events."""
     return analytics_engine.get_latest_events()

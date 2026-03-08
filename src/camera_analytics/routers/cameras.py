@@ -2,7 +2,7 @@
 API router for camera management.
 """
 
-
+from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from camera_analytics.core.camera_manager import CameraConfig, CameraManager, CameraStatus
@@ -15,10 +15,11 @@ def get_camera_manager(request: Request) -> CameraManager:
     return request.app.state.core_components["camera_manager"]
 
 
-@router.get("/cameras", response_model=list[dict])
+@router.get("/cameras")
 async def list_cameras(camera_manager: CameraManager = Depends(get_camera_manager)):
     """List all cameras."""
-    return await camera_manager.list_cameras()
+    cameras = await camera_manager.list_cameras()
+    return list(cameras.values())
 
 
 @router.post("/cameras", status_code=201)

@@ -2,6 +2,7 @@
 
 import logging
 import sys
+from typing import Optional
 
 from pythonjsonlogger import jsonlogger
 
@@ -9,7 +10,7 @@ from pythonjsonlogger import jsonlogger
 def setup_logging(
     level: str = "INFO",
     format_type: str = "json",
-    log_file: str | None = None,
+    log_file: Optional[str] = None,
 ) -> None:
     """
     Configure application logging.

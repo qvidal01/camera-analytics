@@ -10,6 +10,7 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
+from typing import Dict, Optional
 
 import cv2
 import numpy as np
@@ -74,7 +75,7 @@ class CameraSource(ABC):
         """
         self.config = config
         self.status = CameraStatus.DISCONNECTED
-        self._capture: cv2.VideoCapture | None = None
+        self._capture: Optional[cv2.VideoCapture] = None
 
     @abstractmethod
     async def connect(self) -> bool:
@@ -92,7 +93,7 @@ class CameraSource(ABC):
         pass
 
     @abstractmethod
-    async def read_frame(self) -> np.ndarray | None:
+    async def read_frame(self) -> Optional[np.ndarray]:
         """
         Read next frame from camera.
 
@@ -127,7 +128,12 @@ class CameraSource(ABC):
 
 
 class RTSPCamera(CameraSource):
-    """RTSP IP camera implementation."""
+    """RTSP IP camera implementation with auto-reconnect."""
+
+    def __init__(self, config: CameraConfig):
+        super().__init__(config)
+        self._consecutive_failures = 0
+        self._max_failures = 10  # Reconnect after this many failed reads
 
     async def connect(self) -> bool:
         """Connect to RTSP camera stream."""
@@ -135,14 +141,21 @@ class RTSPCamera(CameraSource):
             logger.info(f"Connecting to RTSP camera: {self.config.name}")
             self.status = CameraStatus.CONNECTING
 
+            # Use TCP transport for stable RTSP streams
+            import os
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;tcp"
+
             # Use async wrapper for blocking CV2 call
             loop = asyncio.get_event_loop()
             self._capture = await loop.run_in_executor(
-                None, cv2.VideoCapture, self.config.source_url
+                None, lambda: cv2.VideoCapture(self.config.source_url, cv2.CAP_FFMPEG)
             )
 
             if self._capture.isOpened():
+                # Minimize internal buffer to get fresher frames
+                self._capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
                 self.status = CameraStatus.CONNECTED
+                self._consecutive_failures = 0
                 logger.info(f"Successfully connected to {self.config.name}")
                 return True
             else:
@@ -163,23 +176,53 @@ class RTSPCamera(CameraSource):
         self.status = CameraStatus.DISCONNECTED
         logger.info(f"Disconnected from {self.config.name}")
 
-    async def read_frame(self) -> np.ndarray | None:
-        """Read frame from RTSP stream."""
+    async def _reconnect(self) -> bool:
+        """Reconnect to the RTSP stream."""
+        logger.info(f"Reconnecting to {self.config.name}...")
+        if self._capture:
+            self._capture.release()
+            self._capture = None
+        return await self.connect()
+
+    async def read_frame(self) -> Optional[np.ndarray]:
+        """Read frame from RTSP stream with auto-reconnect and buffer flush."""
         if not self._capture or not self._capture.isOpened():
-            return None
+            # Try to reconnect
+            if not await self._reconnect():
+                return None
 
         try:
             loop = asyncio.get_event_loop()
-            ret, frame = await loop.run_in_executor(None, self._capture.read)
+
+            # Flush the OpenCV internal buffer to get the LATEST frame.
+            # OpenCV buffers multiple frames from RTSP streams internally.
+            # If we read slower than the stream FPS, we get stale frames
+            # that can be seconds or minutes old.
+            def _grab_latest():
+                # Grab (discard) buffered frames, then read the freshest one
+                for _ in range(5):
+                    self._capture.grab()
+                ret, frame = self._capture.read()
+                return ret, frame
+
+            ret, frame = await loop.run_in_executor(None, _grab_latest)
 
             if ret and frame is not None:
+                self._consecutive_failures = 0
                 return frame
             else:
-                logger.warning(f"Failed to read frame from {self.config.name}")
+                self._consecutive_failures += 1
+                if self._consecutive_failures >= self._max_failures:
+                    logger.warning(f"{self.config.name}: {self._consecutive_failures} consecutive failures, reconnecting...")
+                    self._consecutive_failures = 0
+                    await self._reconnect()
                 return None
 
         except Exception as e:
             logger.exception(f"Error reading frame from {self.config.name}: {e}")
+            self._consecutive_failures += 1
+            if self._consecutive_failures >= self._max_failures:
+                await self._reconnect()
             return None
 
 
@@ -230,7 +273,7 @@ class USBCamera(CameraSource):
         self.status = CameraStatus.DISCONNECTED
         logger.info(f"Disconnected from {self.config.name}")
 
-    async def read_frame(self) -> np.ndarray | None:
+    async def read_frame(self) -> Optional[np.ndarray]:
         """Read frame from USB camera."""
         if not self._capture or not self._capture.isOpened():
             return None
@@ -286,7 +329,7 @@ class FileCamera(CameraSource):
         self.status = CameraStatus.DISCONNECTED
         logger.info(f"Closed {self.config.name}")
 
-    async def read_frame(self) -> np.ndarray | None:
+    async def read_frame(self) -> Optional[np.ndarray]:
         """Read frame from video file."""
         if not self._capture or not self._capture.isOpened():
             return None
@@ -318,8 +361,8 @@ class CameraManager:
 
     def __init__(self):
         """Initialize camera manager."""
-        self.cameras: dict[str, CameraSource] = {}
-        self._tasks: dict[str, asyncio.Task] = {}
+        self.cameras: Dict[str, CameraSource] = {}
+        self._tasks: Dict[str, asyncio.Task] = {}
         logger.info("CameraManager initialized")
 
     async def add_camera(self, config: CameraConfig) -> bool:
@@ -375,7 +418,7 @@ class CameraManager:
         del self.cameras[camera_id]
         logger.info(f"Removed camera: {camera.config.name} ({camera_id})")
 
-    async def get_frame(self, camera_id: str) -> np.ndarray | None:
+    async def get_frame(self, camera_id: str) -> Optional[np.ndarray]:
         """
         Get current frame from camera.
 
@@ -392,7 +435,7 @@ class CameraManager:
         camera = self.cameras[camera_id]
         return await camera.read_frame()
 
-    async def get_camera_status(self, camera_id: str) -> CameraStatus | None:
+    async def get_camera_status(self, camera_id: str) -> Optional[CameraStatus]:
         """
         Get camera connection status.
 
@@ -406,7 +449,7 @@ class CameraManager:
             return None
         return self.cameras[camera_id].status
 
-    async def list_cameras(self) -> dict[str, dict]:
+    async def list_cameras(self) -> Dict[str, Dict]:
         """
         List all cameras with their status.
 
